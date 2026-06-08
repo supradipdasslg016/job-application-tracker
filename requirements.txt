@@ -2,4 +2,4 @@ streamlit
 pandas
 pypdf
 scikit-learn
-reportlab
+python-docx

@@ -480,5 +480,4 @@ def generate_upgraded_docx(user, role, domain, matches, missing, ai_content):
     if missing:
         p_skills2 = doc.add_paragraph()
         p_skills2.paragraph_format.space_after = Pt(4)
-        run_sk2_title = p_skills2.add_run("Target Role Requirements Appended: ")
-        run_sk2_title.bold = True
+        run

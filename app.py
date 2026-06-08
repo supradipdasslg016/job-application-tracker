@@ -21,7 +21,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 # =========================================================================
 
 def remove_table_borders(table):
-    """Removes all visual borders from a Word table to handle LaTeX two-column behavior cleanly."""
+    """Removes all visual borders from a Word table to handle standard two-column behavior cleanly."""
     tblPr = table._tbl.tblPr
     tblBorders = OxmlElement('w:tblBorders')
     for border_name in ['top', 'left', 'bottom', 'right', 'insideH', 'insideV']:
@@ -212,11 +212,11 @@ def analyze_resume_vs_jd(cv_text, jd_text, role_name, user_exp, job_exp_req, use
     return final_score, all_matches, all_missing, score_breakdown
 
 # =========================================================================
-# 3. NATIVE 100% LATEX-TO-WORD TEMPLATE CONSTRUCTION ENGINE
+# 3. NATIVE WORD TEMPLATE CONSTRUCTION ENGINE
 # =========================================================================
 
 def generate_upgraded_docx(user, role, domain, matches, missing):
-    """Constructs a high-fidelity Microsoft Word Document mirroring the LaTeX visual architecture."""
+    """Constructs a high-fidelity Microsoft Word Document mirroring your custom layout rules."""
     doc = Document()
     
     # Force strict 0.5-inch crisp formatting margins
@@ -226,7 +226,6 @@ def generate_upgraded_docx(user, role, domain, matches, missing):
         section.left_margin = Inches(0.5)
         section.right_margin = Inches(0.5)
         
-    # Helper for adding crisp section breaks mimicking \titrule
     def add_section_heading(title_text):
         p = doc.add_paragraph()
         p.paragraph_format.space_before = Pt(12)
@@ -237,9 +236,6 @@ def generate_upgraded_docx(user, role, domain, matches, missing):
         run.font.size = Pt(11.5)
         run.font.bold = True
         run.font.color.rgb = RGBColor(0, 0, 0)
-        # Add bottom border styling via an elegant thin baseline underline
-        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        p.style.font.underline = False
         
     def format_bullet(text_content):
         p = doc.add_paragraph(style='List Bullet')
@@ -275,8 +271,6 @@ def generate_upgraded_docx(user, role, domain, matches, missing):
     p_summary.paragraph_format.space_after = Pt(6)
     p_summary.paragraph_format.line_spacing = 1.15
     
-    # In-line contextual text compilation pairing their background with target metrics
-    target_skills_phrase = f", utilizing advanced competencies in {', '.join(missing[:2])}," if len(missing) >= 2 else ""
     summary_text = (
         f"Strategic and data-driven professional calibrated for high-velocity execution within the {domain} sector, "
         f"specializing as a dedicated {role}. Adept at leveraging sophisticated analytical methodologies, market tracking pipelines, "
@@ -357,22 +351,17 @@ def generate_upgraded_docx(user, role, domain, matches, missing):
     p_jdate1.runs[0].font.name = 'Times New Roman'
     p_jdate1.runs[0].font.size = Pt(10)
     
-    # Injected content upgrade bullets adding missing core competencies dynamically
     bullet_exp1 = f"Drove over 200 high-intent walk-ins for both residential and commercial projects of Kamdhenu Realty by engineering data-driven market trend models and tracking consumer behaviors, directly yielding a total revenue capitalization of 21 crores."
     format_bullet(bullet_exp1)
     
-    # Intentionally mapping a missing tool framework into the action verb context
-    inj_skill_1 = missing[0] if len(missing) > 0 else "Structured Frameworks"
     bullet_exp2 = f"Cultivated and managed professional relationships with over 200 channel partners in Navi Mumbai, successfully deploying targeted tracking workflows to activate 40+ new partners and systematically expand the project's sales footprint."
     format_bullet(bullet_exp2)
     
-    inj_skill_2 = missing[1] if len(missing) > 1 else "Data Analysis"
     bullet_exp3 = f"Led and mentored a three-person pre-sales team, optimizing lead capture pipelines via integrated analytics to generate 60+ conversions through target tele-calling parameters."
     format_bullet(bullet_exp3)
     format_bullet("Actively structured closing lifecycles, representing corporate positioning at local property exhibitions to isolate 30+ high-fidelity leads.")
 
     # Job 2: Flow Realty
-    st.write("")
     table_job2 = doc.add_table(rows=1, cols=2)
     table_job2.autofit = False
     remove_table_borders(table_job2)
@@ -387,7 +376,6 @@ def generate_upgraded_docx(user, role, domain, matches, missing):
     p_jdate2.runs[0].font.name = 'Times New Roman'
     p_jdate2.runs[0].font.size = Pt(10)
     
-    inj_skill_3 = missing[2] if len(missing) > 2 else "Performance Optimization"
     format_bullet(f"Successfully boosted Month-on-Month (M-O-M) sales volumes across the premium portfolio of the 'ESPB' division by 21 percent using precise data modeling.")
     format_bullet("Expanded strategic distribution networks through adding 2 new enterprise dealers, delivering an immediate additional revenue baseline of 3 lakhs.")
     format_bullet("Added 17 new high-velocity retail outlets in active beats, enhancing penetration metrics of 'PAPERKRAFT' pens by 3 percent.")
@@ -409,7 +397,6 @@ def generate_upgraded_docx(user, role, domain, matches, missing):
     row_p1[1].paragraphs[0].runs[0].font.size = Pt(10)
     row_p1[1].paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.RIGHT
     
-    inj_skill_4 = missing[3] if len(missing) > 3 else "Statistical Refinement"
     format_bullet("Conducted a comprehensive quantitative primary market survey among 160 active retailers to track purchasing drivers, using the data to map regional supply vulnerabilities.")
     format_bullet("Utilized advanced factor analysis and cluster modeling to isolate and evaluate the core variables affecting retailer purchase decisions.")
     format_bullet("Performed comparative analysis via the 'compare mean' methodology to accurately evaluate and map the local competitive landscape against primary industry rivals.")
@@ -483,7 +470,7 @@ if 'private_apps' not in st.session_state:
 if 'analysis_buffer' not in st.session_state:
     st.session_state.analysis_buffer = None
 
-# VIEW 1: LANDING PAGE
+# VIEW 1: LANDING PAGE (TYPO FIXED HERE)
 if st.session_state.view_state == 'landing':
     st.markdown("<br><br><br>", unsafe_allow_html=True)
     col_l, col_c, col_r = st.columns([1, 2, 1])
@@ -492,7 +479,8 @@ if st.session_state.view_state == 'landing':
         st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 1.2rem;'>Enterprise-Grade Document Engine. Upload your tracking parameters and automatically generate a flawless, professional Word Resume without leaving the system workstation.</p>", unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         
-        if st.button("🚀 Launch Interactive Tracker Workstation", use_container_width=True, use_container_width_type="primary" if True else "primary"):
+        # FIXED: Cleared out non-existent parameters causing the TypeError
+        if st.button("🚀 Launch Interactive Tracker Workstation", use_container_width=True, type="primary"):
             st.session_state.view_state = 'onboarding'
             st.rerun()
 
@@ -597,7 +585,6 @@ elif st.session_state.view_state == 'main_app':
                     matched_string = ", ".join(matches) if matches else "None"
                     missing_string = ", ".join(missing) if missing else "None"
                     
-                    # TRIGGER DOCX GENERATOR EXECUTABLE OVER NATIVE RAW STRUCTURAL ARRAYS
                     docx_binary_data = generate_upgraded_docx(user, role, domain, matches, missing)
 
                     app_record = {

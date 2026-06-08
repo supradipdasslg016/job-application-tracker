@@ -14,8 +14,21 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
-# --- DATABASE SETUP (UPDATED TO V2 TO RESET CLOUD CACHE) ---
+# =========================================================================
+# 1. CORE HELPER FUNCTIONS & ENGINES (GLOBAL SCOPE)
+# =========================================================================
+
+def extract_text_from_pdf(uploaded_file):
+    """Extracts text from an uploaded PDF file safely."""
+    try:
+        reader = PdfReader(uploaded_file)
+        text = "".join([page.extract_text() or "" for page in reader.pages])
+        return text.lower()
+    except Exception as e:
+        return ""
+
 def init_admin_db():
+    """Initializes the SQLite database for tracking profiles."""
     conn = sqlite3.connect('admin_metrics_v2.db')
     c = conn.cursor()
     c.execute('''
@@ -35,6 +48,7 @@ def init_admin_db():
     conn.close()
 
 def save_profile_to_admin_db(profile):
+    """Saves user onboarding logs to the database."""
     conn = sqlite3.connect('admin_metrics_v2.db')
     c = conn.cursor()
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -45,11 +59,9 @@ def save_profile_to_admin_db(profile):
     conn.commit()
     conn.close()
 
-# --- STANDALONE PROGRAMMATIC PDF GENERATION ENGINE ---
 def generate_standalone_pdf(user, role, domain, matches, missing):
+    """Generates a highly polished, ATS-ready corporate PDF document."""
     buffer = io.BytesIO()
-    
-    # 0.5 inch margins optimized for ATS parsing architectures
     doc = SimpleDocTemplate(
         buffer, 
         pagesize=letter, 
@@ -61,14 +73,13 @@ def generate_standalone_pdf(user, role, domain, matches, missing):
     
     styles = getSampleStyleSheet()
     
-    # Custom Corporate Typography Schemas
     title_style = ParagraphStyle(
         'DocTitle',
         parent=styles['Normal'],
         fontName='Helvetica-Bold',
         fontSize=24,
         leading=28,
-        alignment=1, # Centered
+        alignment=1,
         textColor=colors.HexColor("#0f172a")
     )
     
@@ -78,7 +89,7 @@ def generate_standalone_pdf(user, role, domain, matches, missing):
         fontName='Helvetica',
         fontSize=10,
         leading=14,
-        alignment=1, # Centered
+        alignment=1,
         textColor=colors.HexColor("#475569")
     )
     
@@ -100,7 +111,7 @@ def generate_standalone_pdf(user, role, domain, matches, missing):
         fontSize=10.5,
         leading=15,
         textColor=colors.HexColor("#334155"),
-        alignment=4 # Justified
+        alignment=4
     )
     
     bullet_style = ParagraphStyle(
@@ -117,27 +128,24 @@ def generate_standalone_pdf(user, role, domain, matches, missing):
 
     story = []
     
-    # 1. Header Block Injection
+    # Structure Building
     story.append(Paragraph(user['name'].upper(), title_style))
     story.append(Spacer(1, 4))
     contact_text = f"{user['hometown']}  |  Supradipdasslg016@gmail.com  |  +91 6289517253  |  linkedin.com/in/Supradip-Das"
     story.append(Paragraph(contact_text, contact_style))
     story.append(Spacer(1, 8))
     
-    # 2. Personal Summary Block
     story.append(Paragraph("PROFESSIONAL SUMMARY", section_heading))
     story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#cbd5e1"), spaceAfter=6))
     summary_txt = f"Results-oriented Analytics and Strategy Specialist calibrated for high-impact growth execution within the <b>{domain}</b> sector, specializing as a dedicated <b>{role}</b>. Adept at breaking down complex market matrices, identifying targeted pipeline gaps, and implementing structured tool frameworks to maximize multi-channel deployment wins."
     story.append(Paragraph(summary_txt, body_style))
     
-    # 3. Core Skills Block (ATS Targeted Injection)
     story.append(Paragraph("CORE COMPETENCIES & TECHNICAL SKILLS", section_heading))
     story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#cbd5e1"), spaceAfter=6))
     all_skills = list(set(matches + missing + ["SQL", "Python", "Excel", "Power BI", "Data Visualization", "IBM SPSS", "Customer Segmentation"]))
     skills_txt = f"<b>Verified Domain Architectures:</b> {', '.join(all_skills)}"
     story.append(Paragraph(skills_txt, body_style))
     
-    # 4. Experience Highlights Block
     story.append(Paragraph("PROFESSIONAL EXPERIENCE", section_heading))
     story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#cbd5e1"), spaceAfter=6))
     
@@ -151,19 +159,17 @@ def generate_standalone_pdf(user, role, domain, matches, missing):
     else:
         story.append(Paragraph("• Monitored system workflow delivery paths to preserve robust operational quality index limits across sectors.", bullet_style))
         
-    # 5. Education Architecture Block
     story.append(Paragraph("EDUCATION & ACADEMICS", section_heading))
     story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#cbd5e1"), spaceAfter=6))
     edu_txt = f"<b>{user['college']}</b> — {user['degree']}<br/><i>Timeline Frame: {user['grad_year']}  |  Verified Academic Optimization Profile</i>"
     story.append(Paragraph(edu_txt, body_style))
     
-    # Build document stream
     doc.build(story)
     buffer.seek(0)
     return buffer.getvalue()
 
-# --- REFINED EXPERT NLP ENGINE ---
 def analyze_resume_vs_jd(cv_text, jd_text, role_name, user_exp, job_exp_req, user_degree):
+    """Advanced Hybrid ATS Parsing Engine."""
     if not cv_text or not jd_text:
         return 0.0, [], [], {}
     
@@ -264,8 +270,10 @@ def analyze_resume_vs_jd(cv_text, jd_text, role_name, user_exp, job_exp_req, use
     
     return final_score, all_matches, all_missing, score_breakdown
 
-# --- STREAMLIT UI SETUP ---
-st.set_page_config(page_title="Job Track SaaS", page_icon="🎯", layout="wide")
+# =========================================================================
+# 2. STREAMLIT INTERFACE AND ENGINE ENVIRONMENT
+# =========================================================================
+
 init_admin_db()
 
 if 'view_state' not in st.session_state:
@@ -290,7 +298,7 @@ if st.session_state.view_state == 'landing':
             st.session_state.view_state = 'onboarding'
             st.rerun()
 
-# VIEW 2: ONBOARDING CONTEXT
+# VIEW 2: ONBOARDING DATA ENTRY
 elif st.session_state.view_state == 'onboarding':
     st.markdown("<br><br>", unsafe_allow_html=True)
     col_l, col_c, col_r = st.columns([1, 1.5, 1])
@@ -324,7 +332,7 @@ elif st.session_state.view_state == 'onboarding':
                     st.session_state.view_state = 'main_app'
                     st.rerun()
 
-# VIEW 3: MAIN APP FUNCTION
+# VIEW 3: MAIN TRACKER & WORKSPACE
 elif st.session_state.view_state == 'main_app':
     st.markdown(f"### 👋 Welcome back, {st.session_state.user_profile['name']} | Standalone Engine Active")
     
@@ -382,10 +390,10 @@ elif st.session_state.view_state == 'main_app':
                 if not role or not domain or not jd_text_block or not uploaded_file:
                     st.error("Critical parsing nodes are missing relevant field input validations.")
                 else:
+                    # Executing the text extraction function now safely positioned in scope
                     cv_extracted_text = extract_text_from_pdf(uploaded_file)
                     user = st.session_state.user_profile
                     
-                    # Compute smart multi-variable metrics
                     score, matches, missing, breakdown = analyze_resume_vs_jd(
                         cv_extracted_text, jd_text_block, role, user['user_exp'], exp_req, user['degree']
                     )
@@ -393,10 +401,8 @@ elif st.session_state.view_state == 'main_app':
                     matched_string = ", ".join(matches) if matches else "None"
                     missing_string = ", ".join(missing) if missing else "None"
                     
-                    # DYNAMIC HIGH-FIDELITY PDF GENERATION (STANDALONE ENGINE)
                     pdf_binary_data = generate_standalone_pdf(user, role, domain, matches, missing)
 
-                    # Persist entry log details
                     app_record = {
                         "Role": role, "Domain": domain, "Recruiter": recruiter, "LinkedIn": linkedin,
                         "Exp Limits": exp_range_calculated, "auto_score": score,
@@ -411,7 +417,7 @@ elif st.session_state.view_state == 'main_app':
                     }
                     st.rerun()
 
-        # --- OUTSIDE ST.FORM CONTAINER (CLEAN PREVIEW ARCHITECTURE) ---
+        # --- OUTSIDE FORM CONTAINER PREVIEW RENDERER ---
         if st.session_state.analysis_buffer is not None:
             buf = st.session_state.analysis_buffer
             st.success("ATS Evaluation Matrix Compiled Successfully!")
@@ -432,7 +438,6 @@ elif st.session_state.view_state == 'main_app':
                 st.markdown("### **Stand-alone Document Output Gateway**")
                 st.markdown("🔥 **SaaS Value Delivered:** Your upgraded corporate document is built. The engine has successfully injected your onboarding metadata, balanced experience tolerances, mapped sector-specific implicit rules, and compiled a high-fidelity, ATS-optimized PDF resume instantly.")
                 
-                # Direct Binary PDF Download Component
                 st.download_button(
                     label="📥 Download Upgraded ATS-Optimized Resume (PDF Format)",
                     data=buf['pdf_blob'],

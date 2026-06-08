@@ -68,31 +68,56 @@ def analyze_resume_vs_jd(cv_text, jd_text):
     if not cv_text or not jd_text:
         return 0.0, [], []
     
-    # 1. Calculate automated fit score using Cosine Similarity (TF-IDF)
-    vectorizer = TfidfVectorizer(stop_words='english')
+    # 1. Explicitly blacklist corporate fluff and generic transition words
+    corporate_fluff = {
+        'experience', 'years', 'role', 'team', 'work', 'working', 'ability', 'skills', 'required',
+        'requirements', 'responsibilities', 'successful', 'candidate', 'job', 'description', 'join',
+        'environment', 'management', 'managing', 'support', 'business', 'strong', 'excellent',
+        'written', 'verbal', 'communication', 'track', 'record', 'reporting', 'day', 'tasks',
+        'knowledge', 'understanding', 'preferred', 'plus', 'degree', 'field', 'related', 'position',
+        'company', 'organization', 'dynamic', 'passionate', 'growth', 'exciting', 'apply', 'responsibilities'
+    }
+    
+    # 2. Fit Score using Bigrams (captures 1-word and 2-word combinations)
+    vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 2))
     tfidf_matrix = vectorizer.fit_transform([jd_text, cv_text])
     similarity = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0]
-    auto_score = round(similarity * 10, 1) # Map to a 0-10 scale
+    auto_score = round(similarity * 10, 1)
     
-    # 2. Extract Top Keywords from JD using TF-IDF ranking
-    jd_vectorizer = TfidfVectorizer(stop_words='english')
+    # 3. Extract Top Keywords using a phrase-aware ranking system
+    jd_vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 2))
     jd_matrix = jd_vectorizer.fit_transform([jd_text])
     feature_names = jd_vectorizer.get_feature_names_out()
     scores = jd_matrix.toarray()[0]
     
-    # Get top 15 highest scoring meaningful words from the JD
-    top_jd_words = [feature_names[i] for i in scores.argsort()[::-1][:15] if len(feature_names[i]) > 2]
+    # Sort words/phrases by their relevance score
+    sorted_indices = scores.argsort()[::-1]
+    top_jd_words = []
     
-    # 3. Match keywords against CV text
+    for idx in sorted_indices:
+        word = feature_names[idx]
+        
+        # Skip words that are numbers, too short, or contain blacklisted fluff
+        if len(word) < 3 or word.isdigit():
+            continue
+        if any(fluff in word.split() for fluff in corporate_fluff):
+            continue
+            
+        top_jd_words.append(word)
+        if len(top_jd_words) >= 12: # Extract the top 12 true domain keywords
+            break
+            
+    # 4. Math Check: Cross-reference keywords against CV
     matched = []
     missing = []
     for word in top_jd_words:
-        # Check for whole word match to avoid substring false positives
+        # Use regex to find whole phrases/words cleanly
         pattern = r'\b' + re.escape(word) + r'\b'
         if re.search(pattern, cv_text):
-            matched.append(word)
+            # Capitalize words nicely for the UI display
+            matched.append(word.title())
         else:
-            missing.append(word)
+            missing.append(word.title())
             
     return auto_score, matched, missing
 

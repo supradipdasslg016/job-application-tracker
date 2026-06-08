@@ -14,9 +14,9 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
 
-# --- DATABASE SETUP ---
+# --- DATABASE SETUP (UPDATED TO V2 TO RESET CLOUD CACHE) ---
 def init_admin_db():
-    conn = sqlite3.connect('admin_metrics.db')
+    conn = sqlite3.connect('admin_metrics_v2.db')
     c = conn.cursor()
     c.execute('''
         CREATE TABLE IF NOT EXISTS visitor_profiles (
@@ -35,7 +35,7 @@ def init_admin_db():
     conn.close()
 
 def save_profile_to_admin_db(profile):
-    conn = sqlite3.connect('admin_metrics.db')
+    conn = sqlite3.connect('admin_metrics_v2.db')
     c = conn.cursor()
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     c.execute('''
@@ -333,7 +333,7 @@ elif st.session_state.view_state == 'main_app':
         admin_pass = st.text_input("Enter Key", type="password")
         if admin_pass == "admin2026":
             st.success("Access Authorized")
-            admin_conn = sqlite3.connect('admin_metrics.db')
+            admin_conn = sqlite3.connect('admin_metrics_v2.db')
             admin_df = pd.read_sql_query("SELECT * FROM visitor_profiles", admin_conn)
             admin_conn.close()
             st.write("**Global Profile Log Database Ledger:**")

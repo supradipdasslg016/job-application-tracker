@@ -538,16 +538,16 @@ elif st.session_state.view_state == 'onboarding':
         st.subheader("📋 Complete Your Profile Sandbox Configuration")
         
         with st.form("onboarding_form"):
-            name = st.text_input("Full Name*", value="Supradip Das") 
+            name = st.text_input("Full Name*", value=" ") 
             col_row1, col_row2 = st.columns(2)
             age = col_row1.number_input("Age*", min_value=15, max_value=100, value=28) 
-            hometown = col_row2.text_input("Hometown / Current City*", value="Pune, Maharashtra") 
+            hometown = col_row2.text_input("Hometown / Current City*", value="Ex - Pune, Maharashtra") 
             
-            college = st.text_input("Current/Last College Name*", value="Pune Institute of Business Management") 
-            degree = st.text_input("Pursuing / Completed Degree*", value="PGDM (Marketing Operations)") 
+            college = st.text_input("Current/Last College Name*", value=" ") 
+            degree = st.text_input("Pursuing / Completed Degree*", value="Ex - PGDM (Marketing Operations)") 
             
             col_row3, col_row4 = st.columns(2)
-            grad_year = col_row3.text_input("Graduation Timeline Frame*", value="May 2023 – June 2025") 
+            grad_year = col_row3.text_input("Graduation Timeline Frame*", value="Ex - May 2023 – June 2025") 
             user_exp = col_row4.number_input("Your Total Work Experience (Years)*", min_value=0.0, max_value=30.0, value=2.0, step=0.5)
             
             if st.form_submit_button("Initialize Main Dashboard", type="primary"):

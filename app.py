@@ -4,8 +4,15 @@ import pandas as pd
 from pypdf import PdfReader
 import datetime
 import re
+import io
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
+
+# ReportLab Components for Standalone PDF Generation
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, HRFlowable
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib import colors
 
 # --- DATABASE SETUP ---
 def init_admin_db():
@@ -20,7 +27,8 @@ def init_admin_db():
             hometown TEXT,
             college TEXT,
             degree TEXT,
-            grad_year TEXT
+            grad_year TEXT,
+            user_exp REAL
         )
     ''')
     conn.commit()
@@ -31,79 +39,232 @@ def save_profile_to_admin_db(profile):
     c = conn.cursor()
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     c.execute('''
-        INSERT INTO visitor_profiles (timestamp, name, age, hometown, college, degree, grad_year)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (timestamp, profile['name'], profile['age'], profile['hometown'], profile['college'], profile['degree'], profile['grad_year']))
+        INSERT INTO visitor_profiles (timestamp, name, age, hometown, college, degree, grad_year, user_exp)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (timestamp, profile['name'], profile['age'], profile['hometown'], profile['college'], profile['degree'], profile['grad_year'], profile['user_exp']))
     conn.commit()
     conn.close()
 
-# --- YOUR REFINED NLP ENGINE ---
-def analyze_resume_vs_jd(cv_text, jd_text):
-    if not cv_text or not jd_text:
-        return 0.0, [], []
+# --- STANDALONE PROGRAMMATIC PDF GENERATION ENGINE ---
+def generate_standalone_pdf(user, role, domain, matches, missing):
+    buffer = io.BytesIO()
     
-    # 1. Explicitly blacklist corporate fluff and generic transition words
+    # 0.5 inch margins optimized for ATS parsing architectures
+    doc = SimpleDocTemplate(
+        buffer, 
+        pagesize=letter, 
+        leftMargin=36, 
+        rightMargin=36, 
+        topMargin=36, 
+        bottomMargin=36
+    )
+    
+    styles = getSampleStyleSheet()
+    
+    # Custom Corporate Typography Schemas
+    title_style = ParagraphStyle(
+        'DocTitle',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=24,
+        leading=28,
+        alignment=1, # Centered
+        textColor=colors.HexColor("#0f172a")
+    )
+    
+    contact_style = ParagraphStyle(
+        'DocContact',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=10,
+        leading=14,
+        alignment=1, # Centered
+        textColor=colors.HexColor("#475569")
+    )
+    
+    section_heading = ParagraphStyle(
+        'SectionHeading',
+        parent=styles['Normal'],
+        fontName='Helvetica-Bold',
+        fontSize=12,
+        leading=16,
+        textColor=colors.HexColor("#1e3a8a"),
+        spaceBefore=12,
+        spaceAfter=4
+    )
+    
+    body_style = ParagraphStyle(
+        'DocBody',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=10.5,
+        leading=15,
+        textColor=colors.HexColor("#334155"),
+        alignment=4 # Justified
+    )
+    
+    bullet_style = ParagraphStyle(
+        'DocBullet',
+        parent=styles['Normal'],
+        fontName='Helvetica',
+        fontSize=10,
+        leading=14,
+        leftIndent=15,
+        firstLineIndent=-10,
+        spaceAfter=3,
+        textColor=colors.HexColor("#334155")
+    )
+
+    story = []
+    
+    # 1. Header Block Injection
+    story.append(Paragraph(user['name'].upper(), title_style))
+    story.append(Spacer(1, 4))
+    contact_text = f"{user['hometown']}  |  Supradipdasslg016@gmail.com  |  +91 6289517253  |  linkedin.com/in/Supradip-Das"
+    story.append(Paragraph(contact_text, contact_style))
+    story.append(Spacer(1, 8))
+    
+    # 2. Personal Summary Block
+    story.append(Paragraph("PROFESSIONAL SUMMARY", section_heading))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#cbd5e1"), spaceAfter=6))
+    summary_txt = f"Results-oriented Analytics and Strategy Specialist calibrated for high-impact growth execution within the <b>{domain}</b> sector, specializing as a dedicated <b>{role}</b>. Adept at breaking down complex market matrices, identifying targeted pipeline gaps, and implementing structured tool frameworks to maximize multi-channel deployment wins."
+    story.append(Paragraph(summary_txt, body_style))
+    
+    # 3. Core Skills Block (ATS Targeted Injection)
+    story.append(Paragraph("CORE COMPETENCIES & TECHNICAL SKILLS", section_heading))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#cbd5e1"), spaceAfter=6))
+    all_skills = list(set(matches + missing + ["SQL", "Python", "Excel", "Power BI", "Data Visualization", "IBM SPSS", "Customer Segmentation"]))
+    skills_txt = f"<b>Verified Domain Architectures:</b> {', '.join(all_skills)}"
+    story.append(Paragraph(skills_txt, body_style))
+    
+    # 4. Experience Highlights Block
+    story.append(Paragraph("PROFESSIONAL EXPERIENCE", section_heading))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#cbd5e1"), spaceAfter=6))
+    
+    story.append(Paragraph("<b>Marketing Manager</b> — PROPACITY PROPTECH PVT. LTD. (Sept 2025 - May 2026)", body_style))
+    story.append(Spacer(1, 3))
+    story.append(Paragraph("• Generated over <b>200 strategic walk-ins</b> for premium properties by analyzing local consumer behaviors, directly producing an optimization framework valued at <b>21 crores</b>.", bullet_style))
+    story.append(Paragraph("• Cultivated and managed relationships with 200+ channel partners, successfully activating high-value micro-market broker networks.", bullet_style))
+    
+    if missing:
+        story.append(Paragraph(f"• Spearheaded cross-functional pipeline evaluations using targeted <b>{missing[0]}</b> and <b>{missing[1] if len(missing)>1 else missing[0]}</b> architectures to mitigate tracking fragmentation errors.", bullet_style))
+    else:
+        story.append(Paragraph("• Monitored system workflow delivery paths to preserve robust operational quality index limits across sectors.", bullet_style))
+        
+    # 5. Education Architecture Block
+    story.append(Paragraph("EDUCATION & ACADEMICS", section_heading))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#cbd5e1"), spaceAfter=6))
+    edu_txt = f"<b>{user['college']}</b> — {user['degree']}<br/><i>Timeline Frame: {user['grad_year']}  |  Verified Academic Optimization Profile</i>"
+    story.append(Paragraph(edu_txt, body_style))
+    
+    # Build document stream
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+# --- REFINED EXPERT NLP ENGINE ---
+def analyze_resume_vs_jd(cv_text, jd_text, role_name, user_exp, job_exp_req, user_degree):
+    if not cv_text or not jd_text:
+        return 0.0, [], [], {}
+    
+    cv_clean = cv_text.lower().strip()
+    jd_clean = jd_text.lower().strip()
+    role_clean = role_name.lower().strip()
+    
     corporate_fluff = {
         'experience', 'years', 'role', 'team', 'work', 'working', 'ability', 'skills', 'required',
         'requirements', 'responsibilities', 'successful', 'candidate', 'job', 'description', 'join',
         'environment', 'management', 'managing', 'support', 'business', 'strong', 'excellent',
         'written', 'verbal', 'communication', 'track', 'record', 'reporting', 'day', 'tasks',
         'knowledge', 'understanding', 'preferred', 'plus', 'degree', 'field', 'related', 'position',
-        'company', 'organization', 'dynamic', 'passionate', 'growth', 'exciting', 'apply', 'responsibilities'
+        'company', 'organization', 'dynamic', 'passionate', 'growth', 'exciting', 'apply'
     }
     
-    # 2. Fit Score using Bigrams (captures 1-word and 2-word combinations)
-    vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 2))
-    tfidf_matrix = vectorizer.fit_transform([jd_text, cv_text])
-    similarity = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0]
-    auto_score = round(similarity * 10, 1)
+    domain_knowledge_map = {
+        "product": ["figma", "jira", "agile", "scrum", "prd", "wireframe", "roadmap", "user stories", "a/b testing", "product lifecycle"],
+        "data": ["sql", "python", "power bi", "tableau", "excel", "spss", "sas", "data visualization", "regression", "r analytics"],
+        "analyst": ["sql", "excel", "power bi", "tableau", "data analysis", "reporting", "dashboards", "analytics"],
+        "research": ["spss", "survey design", "qualitative", "quantitative", "factor analysis", "cluster analysis", "focus groups", "market analysis"],
+        "marketing": ["seo", "sem", "branding", "roi campaigns", "google analytics", "lead generation", "crm", "content strategy", "oesp"],
+        "brand": ["branding", "positioning", "market penetration", "campaign execution", "consumer behavior", "agency management"]
+    }
     
-    # 3. Extract Top Keywords using a phrase-aware ranking system
+    target_implicit_skills = []
+    for key, skills in domain_knowledge_map.items():
+        if key in role_clean:
+            target_implicit_skills.extend(skills)
+            
+    if not target_implicit_skills:
+        target_implicit_skills = ["strategy", "project execution", "data-driven", "optimization", "cross-functional"]
+    
+    target_implicit_skills = list(set(target_implicit_skills))
+    
     jd_vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 2))
-    jd_matrix = jd_vectorizer.fit_transform([jd_text])
-    feature_names = jd_vectorizer.get_feature_names_out()
-    scores = jd_matrix.toarray()[0]
-    
-    # Sort words/phrases by their relevance score
-    sorted_indices = scores.argsort()[::-1]
-    top_jd_words = []
-    
-    for idx in sorted_indices:
-        word = feature_names[idx]
-        
-        # Skip words that are numbers, too short, or contain blacklisted fluff
-        if len(word) < 3 or word.isdigit():
-            continue
-        if any(fluff in word.split() for fluff in corporate_fluff):
-            continue
-            
-        top_jd_words.append(word)
-        if len(top_jd_words) >= 12: # Extract the top 12 true domain keywords
-            break
-            
-    # 4. Math Check: Cross-reference keywords against CV
-    matched = []
-    missing = []
-    for word in top_jd_words:
-        # Use regex to find whole phrases/words cleanly
-        pattern = r'\b' + re.escape(word) + r'\b'
-        if re.search(pattern, cv_text):
-            # Capitalize words nicely for the UI display
-            matched.append(word.title())
-        else:
-            missing.append(word.title())
-            
-    return auto_score, matched, missing
-
-def extract_text_from_pdf(uploaded_file):
     try:
-        reader = PdfReader(uploaded_file)
-        text = "".join([page.extract_text() or "" for page in reader.pages])
-        return text.lower()
+        jd_matrix = jd_vectorizer.fit_transform([jd_clean])
+        feature_names = jd_vectorizer.get_feature_names_out()
+        scores = jd_matrix.toarray()[0]
+        sorted_indices = scores.argsort()[::-1]
     except:
-        return ""
+        sorted_indices = []
+        feature_names = []
+        
+    top_jd_phrases = []
+    for idx in sorted_indices:
+        phrase = feature_names[idx]
+        if len(phrase) < 3 or phrase.isdigit() or any(fluff in phrase.split() for fluff in corporate_fluff):
+            continue
+        top_jd_phrases.append(phrase)
+        if len(top_jd_phrases) >= 12:
+            break
 
-# --- APPLICATION INIT ---
+    matched_explicit = [p.title() for p in top_jd_phrases if p in cv_clean]
+    missing_explicit = [p.title() for p in top_jd_phrases if p not in cv_clean]
+    
+    matched_implicit = [s.title() for s in target_implicit_skills if s in cv_clean]
+    missing_implicit = [s.title() for s in target_implicit_skills if s not in cv_clean]
+    
+    explicit_score = (len(matched_explicit) / len(top_jd_phrases) * 5.0) if top_jd_phrases else 0.0
+    implicit_score = (len(matched_implicit) / len(target_implicit_skills) * 2.0) if target_implicit_skills else 0.0
+    
+    min_window = max(0, job_exp_req - 3)
+    max_window = job_exp_req + 3
+    if min_window <= user_exp <= max_window:
+        exp_score = 1.5
+    elif abs(user_exp - job_exp_req) <= 4:
+        exp_score = 0.8
+    else:
+        exp_score = 0.2
+        
+    edu_score = 0.5
+    degree_clean = user_degree.lower()
+    edu_indicators = ["mba", "pgdm", "master", "post graduate", "phd", "btech", "bachelor"]
+    required_edu_found = [e for e in edu_indicators if e in jd_clean]
+    
+    if not required_edu_found:
+        edu_score = 1.5
+    else:
+        if any(req in degree_clean for req in required_edu_found):
+            edu_score = 1.5
+        else:
+            edu_score = 0.8
+
+    final_score = round(explicit_score + implicit_score + exp_score + edu_score, 1)
+    final_score = min(10.0, max(0.0, final_score))
+    
+    score_breakdown = {
+        "Explicit Skills Match (Out of 5)": round(explicit_score, 2),
+        "Domain Tools Alignment (Out of 2)": round(implicit_score, 2),
+        "Experience Windows Fit (Out of 1.5)": round(exp_score, 2),
+        "Education Level Sync (Out of 1.5)": round(edu_score, 2)
+    }
+    
+    all_matches = list(set(matched_explicit + matched_implicit))
+    all_missing = list(set(missing_explicit + missing_implicit))
+    
+    return final_score, all_matches, all_missing, score_breakdown
+
+# --- STREAMLIT UI SETUP ---
 st.set_page_config(page_title="Job Track SaaS", page_icon="🎯", layout="wide")
 init_admin_db()
 
@@ -116,57 +277,57 @@ if 'private_apps' not in st.session_state:
 if 'analysis_buffer' not in st.session_state:
     st.session_state.analysis_buffer = None
 
-# --- ROUTING SYSTEM ---
-
 # VIEW 1: LANDING PAGE
 if st.session_state.view_state == 'landing':
     st.markdown("<br><br><br>", unsafe_allow_html=True)
     col_l, col_c, col_r = st.columns([1, 2, 1])
     with col_c:
         st.markdown("<h1 style='text-align: center; font-size: 3.5rem;'>Data Drives the Insights.<br>Insights Build the Product.</h1>", unsafe_allow_html=True)
-        st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 1.2rem;'>Stop guessing your application market fit. Run deep NLP parameter matching and instantly upgrade your native LaTeX resume formatting.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center; color: #94a3b8; font-size: 1.2rem;'>Advanced ATS Parameter Simulator. Instantly analyze system constraints and download an upgraded, optimized PDF resume directly from this dashboard instance.</p>", unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
         
         if st.button("🚀 Launch Interactive Tracker Workstation", use_container_width=True, type="primary"):
             st.session_state.view_state = 'onboarding'
             st.rerun()
 
-# VIEW 2: ONBOARDING POPUP DIALOG
+# VIEW 2: ONBOARDING CONTEXT
 elif st.session_state.view_state == 'onboarding':
     st.markdown("<br><br>", unsafe_allow_html=True)
     col_l, col_c, col_r = st.columns([1, 1.5, 1])
     with col_c:
         st.subheader("📋 Complete Your Profile Sandbox Configuration")
-        st.write("Please fill in your coordinates to calibrate the dynamic parameters of your customized LaTeX engine.")
+        st.write("Calibrate the system parameters using your actual academic and professional experience boundaries.")
         
         with st.form("onboarding_form"):
             name = st.text_input("Full Name*", placeholder="John Doe")
             col_row1, col_row2 = st.columns(2)
-            age = col_row1.number_input("Age*", min_value=15, max_value=100, value=24)
+            age = col_row1.number_input("Age*", min_value=15, max_value=100, value=25)
             hometown = col_row2.text_input("Hometown / Current City*", placeholder="e.g., Pune, Maharashtra")
             
             college = st.text_input("Current/Last College Name*", placeholder="e.g., Pune Institute of Business Management")
             degree = st.text_input("Pursuing / Completed Degree*", placeholder="e.g., PGDM (Marketing Operations)")
-            grad_year = st.text_input("Graduation Timeline Frame*", placeholder="e.g., May 2023 – June 2025")
+            
+            col_row3, col_row4 = st.columns(2)
+            grad_year = col_row3.text_input("Graduation Timeline Frame*", placeholder="e.g., May 2023 – June 2025")
+            user_exp = col_row4.number_input("Your Total Work Experience (Years)*", min_value=0.0, max_value=30.0, value=2.0, step=0.5)
             
             if st.form_submit_button("Initialize Main Dashboard", type="primary"):
                 if not name or not hometown or not college or not degree or not grad_year:
                     st.error("All parameters are strictly mandatory to compile backend structures.")
                 else:
                     profile_packet = {
-                        'name': name, 'age': int(age), 'hometown': hometown,
-                        'college': college, 'degree': degree, 'grad_year': grad_year
+                        'name': name, 'age': int(age), 'hometown': hometown, 'college': college,
+                        'degree': degree, 'grad_year': grad_year, 'user_exp': float(user_exp)
                     }
                     st.session_state.user_profile = profile_packet
                     save_profile_to_admin_db(profile_packet)
                     st.session_state.view_state = 'main_app'
                     st.rerun()
 
-# VIEW 3: MAIN APP (PRIVATE WORKSPACE)
+# VIEW 3: MAIN APP FUNCTION
 elif st.session_state.view_state == 'main_app':
-    st.markdown(f"### 👋 Welcome back, {st.session_state.user_profile['name']} | LaTeX Engine Online")
+    st.markdown(f"### 👋 Welcome back, {st.session_state.user_profile['name']} | Standalone Engine Active")
     
-    # Hidden Administrator Terminal Doorway in Sidebar
     st.sidebar.title("Configuration Node")
     with st.sidebar.expander("🔑 Secure Admin Gateway"):
         admin_pass = st.text_input("Enter Key", type="password")
@@ -175,7 +336,7 @@ elif st.session_state.view_state == 'main_app':
             admin_conn = sqlite3.connect('admin_metrics.db')
             admin_df = pd.read_sql_query("SELECT * FROM visitor_profiles", admin_conn)
             admin_conn.close()
-            st.write("**Global Profile Log Database:**")
+            st.write("**Global Profile Log Database Ledger:**")
             st.dataframe(admin_df)
         elif admin_pass:
             st.error("Invalid Administrative Credentials")
@@ -185,7 +346,6 @@ elif st.session_state.view_state == 'main_app':
     
     if page == "Dashboard & Entries":
         st.title("📊 Your Private Tracking Environment")
-        st.caption("Data here is isolated safely to your local current browser instance tab context.")
         
         if not st.session_state.private_apps:
             st.info("Your application index is empty. Navigate to the tracking engine tab to parse requirements.")
@@ -197,19 +357,19 @@ elif st.session_state.view_state == 'main_app':
             col3.metric("Primary Segment", df['Domain'].value_counts().index[0])
             
             st.markdown("---")
-            st.dataframe(df.drop(columns=['raw_jd', 'latex_source']), use_container_width=True)
+            st.dataframe(df.drop(columns=['raw_jd', 'pdf_blob']), use_container_width=True)
             
     elif page == "Track Application Engine":
         st.title("🎯 Structural Parsing Configuration Matrix")
         
         with st.form("application_pipeline_form"):
             col_a, col_b = st.columns(2)
-            role = col_a.text_input("Job Role Target Name*", placeholder="e.g., Strategic Product Analyst")
-            domain = col_a.text_input("Industry Vertical*", placeholder="e.g., Real Estate, EdTech")
+            role = col_a.text_input("Job Role Target Name*", placeholder="e.g., Marketing Manager")
+            domain = col_a.text_input("Industry Vertical*", placeholder="e.g., Real Estate, PropTech")
             recruiter = col_b.text_input("Recruiter Point-of-Contact Name")
             linkedin = col_b.text_input("Recruiter Profile URL")
             
-            exp_req = st.number_input("Target Experience Metrics", min_value=0, max_value=20, value=2)
+            exp_req = st.number_input("Target Job Experience Requirement (Years)*", min_value=0, max_value=20, value=2)
             exp_range_calculated = f"{max(0, exp_req - 3)} - {exp_req + 3} Years Limit Profile"
             
             st.markdown("---")
@@ -223,200 +383,63 @@ elif st.session_state.view_state == 'main_app':
                     st.error("Critical parsing nodes are missing relevant field input validations.")
                 else:
                     cv_extracted_text = extract_text_from_pdf(uploaded_file)
-                    score, matches, missing = analyze_resume_vs_jd(cv_extracted_text, jd_text_block.lower())
+                    user = st.session_state.user_profile
+                    
+                    # Compute smart multi-variable metrics
+                    score, matches, missing, breakdown = analyze_resume_vs_jd(
+                        cv_extracted_text, jd_text_block, role, user['user_exp'], exp_req, user['degree']
+                    )
                     
                     matched_string = ", ".join(matches) if matches else "None"
                     missing_string = ", ".join(missing) if missing else "None"
                     
-                    # --- NATIVE LATEX SEAMLESS TEMPLATE MATCHING ENGINE ---
-                    user = st.session_state.user_profile
-                    
-                    latex_template = r"""\documentclass[10pt, letterpaper]{article}
-\usepackage[ignoreheadfoot, top=2 cm, bottom=2 cm, left=2 cm, right=2 cm, footskip=1.0 cm]{geometry} 
-\usepackage{titlesec} 
-\usepackage{tabularx} 
-\usepackage{array} 
-\usepackage[dvipsnames]{xcolor} 
-\definecolor{primaryColor}{RGB}{0, 0, 0} 
-\usepackage{enumitem} 
-\usepackage{fontawesome5} 
-\usepackage{amsmath} 
-\usepackage[pdftitle={CV}, pdfauthor={Applicant}, pdfcreator={LaTeX with RenderCV}, colorlinks=true, urlcolor=primaryColor]{hyperref} 
-\usepackage[pscoord]{eso-pic} 
-\usepackage{calc} 
-\usepackage{bookmark} 
-\usepackage{lastpage} 
-\usepackage{changepage} 
-\usepackage{paracol} 
-\usepackage{ifthen} 
-\usepackage{needspace} 
-\usepackage{iftex} 
+                    # DYNAMIC HIGH-FIDELITY PDF GENERATION (STANDALONE ENGINE)
+                    pdf_binary_data = generate_standalone_pdf(user, role, domain, matches, missing)
 
-\ifPDFTeX
-    \input{glyphtounicode}
-    \pdfgentounicode=1
-    \usepackage[T1]{fontenc}
-    \usepackage[utf8]{inputenc}
-    \usepackage{lmodern}
-\fi
-
-\usepackage{charter}
-\raggedright
-\AtBeginEnvironment{adjustwidth}{\partopsep0pt} 
-\pagestyle{empty} 
-\setcounter{secnumdepth}{0} 
-\setlength{\parindent}{0pt} 
-\setlength{\topskip}{0pt} 
-\setlength{\columnsep}{0.15cm} 
-\pagenumbering{gobble} 
-
-\titleformat{\section}{\needspace{4\baselineskip}\bfseries\large}{}{0pt}{}[\vspace{1pt}\titrule]
-\titlespacing{\section}{-1pt}{0.4 cm}{0.4 cm}
-
-\renewcommand\labelitemi{$\vcenter{\hbox{\small$\bullet$}}$} 
-\newenvironment{highlights}{
-    \begin{itemize}[topsep=0.10 cm, parsep=0.10 cm, partopsep=0pt, itemsep=1pt, leftmargin=0 cm + 10pt]
-}{
-    \end{itemize}
-} 
-
-\newenvironment{onecolentry}{
-    \begin{adjustwidth}{0 cm + 0.00001 cm}{0 cm + 0.00001 cm}
-}{
-    \end{adjustwidth}
-} 
-
-\newenvironment{twocolentry}[2][]{
-    \onecolentry
-    \def\secondColumn{#2}
-    \setcolumnwidth{\fill, 4.5 cm}
-    \begin{paracol}{2}
-}{
-    \switchcolumn \raggedleft \secondColumn
-    \end{paracol}
-    \endonecolentry
-} 
-
-\begin{document}
-
-    \begin{header}
-        \fontfamily{cmr}\selectfont\centering{\fontsize{32 pt}{32 pt}\selectfont __NAME__}
-
-        \vspace{5 pt}
-        \centering\normalsize
-        \mbox{__HOMETOWN__}%
-        \kern 5.0 pt$\vert$\kern 5.0 pt%
-        \mbox{\href{mailto:Supradipdasslg016@gmail.com}{Supradipdasslg016@gmail.com}}%
-        \kern 5.0 pt$\vert$\kern 5.0 pt%
-        \mbox{\href{tel:+91 6289517253}{Phone:+91 6289517253}}%
-        \kern 5.0 pt$\vert$\kern 5.0 pt%
-        \mbox{\href{https://www.linkedin.com/in/supradip-das016/}{linkedin.com/in/Supradip Das}}%
-    \end{header}
-
-    \vspace{10 pt}
-
-    \section{Personal Summary}
-    \begin{onecolentry}
-    Professional Analytics and Strategy Specialist with a proven tracking profile inside the \textbf{__DOMAIN__} sector, specialized in navigating the requirements for high-velocity \textbf{__ROLE__} roles. Highly skilled in translating complex structural datasets into actionable insights, driving target objectives, and optimizing performance matrices across key priority business networks.
-    \end{onecolentry}
-
-    \section{Education}
-    \begin{twocolentry}{__GRAD_YEAR__}
-        \fontsize{11 pt}{11 pt}\textbf{__COLLEGE__}, __DEGREE__
-    \end{twocolentry}
-    \vspace{0.10 cm}
-    \begin{onecolentry}
-        \begin{highlights}
-            \item \textbf{Metrics:} CGPA Evaluation Framework Matching Job Targets
-            \item \textbf{Coursework:} Marketing Management, Branding, Digital Infrastructure Analytics, Statistical Optimization.
-        \end{highlights}
-    \end{onecolentry}
-
-    \section{Experience}
-    \begin{twocolentry}{Sept 2025 - May 2026}
-        \fontsize{11 pt}{11 pt}\textbf{Marketing Manager}, PROPACITY PROPTECH PVT. LTD.
-    \end{twocolentry}
-    \vspace{0.10 cm}
-    \begin{onecolentry}
-        \begin{highlights}
-            \item Drove over \textbf{200 walk-ins} for both residential and commercial projects by analyzing market trends and consumer behavior, resulting in a total revenue optimization of \textbf{21 crores}.
-            \item Cultivated and managed strategic relationships with over \textbf{200 channel partners} across key regional micro-markets to expand sales network parameters.
-            __DYNAMIC_EXPERIENCE_BULLET__
-        \end{highlights}
-    \end{onecolentry}
-
-    \section{Skills Matrix (ATS Parameter Injected)}
-    \begin{onecolentry}
-        \begin{highlights}
-            \item \textbf{Verified Match Skills:} __MATCHED_SKILLS__
-            \item \textbf{Target Optimized Competencies:} __MISSING_SKILLS__
-            \item \textbf{Core Frameworks:} SQL, Python, Excel, Power BI, Strategic Frameworks, Data Visualization, IBM SPSS, Customer Segmentation.
-        \end{highlights}
-    \end{onecolentry}
-
-\end{document}"""
-
-                    updated_latex = latex_template.replace("__NAME__", user['name'])
-                    updated_latex = updated_latex.replace("__HOMETOWN__", user['hometown'])
-                    updated_latex = updated_latex.replace("__COLLEGE__", user['college'])
-                    updated_latex = updated_latex.replace("__DEGREE__", user['degree'])
-                    updated_latex = updated_latex.replace("__GRAD_YEAR__", user['grad_year'])
-                    updated_latex = updated_latex.replace("__ROLE__", role)
-                    updated_latex = updated_latex.replace("__DOMAIN__", domain)
-                    updated_latex = updated_latex.replace("__MATCHED_SKILLS__", matched_string)
-                    updated_latex = updated_latex.replace("__MISSING_SKILLS__", missing_string)
-                    
-                    if missing:
-                        bullet_txt = f"\\item Spearheaded custom pipeline evaluations using targeted \\textbf{{{missing[0]}}} and \\textbf{{{missing[1] if len(missing)>1 else missing[0]}}} architectures to eliminate process gaps."
-                    else:
-                        bullet_txt = "\\item Optimized multi-channel operational workflows to maintain robust lead pipeline acquisition standards."
-                    updated_latex = updated_latex.replace("__DYNAMIC_EXPERIENCE_BULLET__", bullet_txt)
-
-                    # Store log packet
+                    # Persist entry log details
                     app_record = {
                         "Role": role, "Domain": domain, "Recruiter": recruiter, "LinkedIn": linkedin,
                         "Exp Limits": exp_range_calculated, "auto_score": score,
                         "Matched Tokens": matched_string, "Missing Tokens": missing_string, 
-                        "raw_jd": jd_text_block, "latex_source": updated_latex
+                        "raw_jd": jd_text_block, "pdf_blob": pdf_binary_data
                     }
                     st.session_state.private_apps.append(app_record)
                     
-                    # Cache states out of form loop boundaries
                     st.session_state.analysis_buffer = {
-                        "role": role, "score": score, "matched_string": matched_string,
-                        "missing_string": missing_string, "updated_latex": updated_latex
+                        "role": role, "score": score, "breakdown": breakdown, "matched_string": matched_string,
+                        "missing_string": missing_string, "pdf_blob": pdf_binary_data
                     }
                     st.rerun()
 
-        # --- SAFE OUTPUT DOMAIN (OUTSIDE ST.FORM) ---
+        # --- OUTSIDE ST.FORM CONTAINER (CLEAN PREVIEW ARCHITECTURE) ---
         if st.session_state.analysis_buffer is not None:
             buf = st.session_state.analysis_buffer
-            st.success("Target Pipeline Executed Successfully!")
+            st.success("ATS Evaluation Matrix Compiled Successfully!")
             
             st.markdown("---")
-            st.subheader("💡 Strategic Action Recommendations & LaTeX Dashboard")
+            st.subheader("💡 Multi-Variable ATS Audit Ledger & Recommendations")
             
             col_rec1, col_rec2 = st.columns(2)
             with col_rec1:
-                st.metric("Algorithmic Match Score", f"{buf['score']} / 10")
-                st.info(f"**Identified Target Alignments:**\n{buf['matched_string']}")
-                st.warning(f"**Critical Targeting Gaps Discovered:**\n{buf['missing_string']}")
+                st.metric("Aggregated Match Score", f"{buf['score']} / 10")
+                st.write("**Algorithmic Weight Breakdown:**")
+                st.json(buf['breakdown'])
+                
+                st.info(f"**Identified Keyword Alignments:**\n{buf['matched_string']}")
+                st.warning(f"**Missing Core Competencies:**\n{buf['missing_string']}")
                 
             with col_rec2:
-                st.markdown("### **Next Steps & Upgraded LaTeX Output**")
-                st.markdown("🔥 **SaaS Feature Unlocked:** We have dynamically updated your exact custom LaTeX layout format! The missing target keywords and tailored bullet entries have been structurally injected into the source code matrix.")
+                st.markdown("### **Stand-alone Document Output Gateway**")
+                st.markdown("🔥 **SaaS Value Delivered:** Your upgraded corporate document is built. The engine has successfully injected your onboarding metadata, balanced experience tolerances, mapped sector-specific implicit rules, and compiled a high-fidelity, ATS-optimized PDF resume instantly.")
                 
-                # Render download component free of form locks
+                # Direct Binary PDF Download Component
                 st.download_button(
-                    label="📥 Download Tailored LaTeX Code (.tex File)",
-                    data=buf['updated_latex'],
-                    file_name=f"{st.session_state.user_profile['name'].lower().replace(' ', '_')}_optimized.tex",
-                    mime="text/x-tex",
+                    label="📥 Download Upgraded ATS-Optimized Resume (PDF Format)",
+                    data=buf['pdf_blob'],
+                    file_name=f"{st.session_state.user_profile['name'].lower().replace(' ', '_')}_optimized_resume.pdf",
+                    mime="application/pdf",
                     use_container_width=True
                 )
-                st.caption("💡 **Execution Guide:** Click download, open the `.tex` file, copy everything, paste it into your workspace on **Overleaf**, and click Recompile for a flawless PDF result.")
+                st.caption("✨ **Zero External Software Needed:** Your download button yields a print-ready, high-fidelity PDF document immediately. No copy-pasting code or leaving the tracking platform required.")
             
-            # Code display box
-            st.markdown("### **Source Preview Matrix**")
-            st.code(buf['updated_latex'], language="latex")
             st.balloons()

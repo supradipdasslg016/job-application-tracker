@@ -37,41 +37,58 @@ def save_profile_to_admin_db(profile):
     conn.commit()
     conn.close()
 
-# --- NLP ENGINE ---
+# --- YOUR REFINED NLP ENGINE ---
 def analyze_resume_vs_jd(cv_text, jd_text):
     if not cv_text or not jd_text:
         return 0.0, [], []
     
+    # 1. Explicitly blacklist corporate fluff and generic transition words
     corporate_fluff = {
         'experience', 'years', 'role', 'team', 'work', 'working', 'ability', 'skills', 'required',
         'requirements', 'responsibilities', 'successful', 'candidate', 'job', 'description', 'join',
         'environment', 'management', 'managing', 'support', 'business', 'strong', 'excellent',
-        'communication', 'track', 'record', 'reporting', 'tasks', 'knowledge', 'understanding'
+        'written', 'verbal', 'communication', 'track', 'record', 'reporting', 'day', 'tasks',
+        'knowledge', 'understanding', 'preferred', 'plus', 'degree', 'field', 'related', 'position',
+        'company', 'organization', 'dynamic', 'passionate', 'growth', 'exciting', 'apply', 'responsibilities'
     }
     
+    # 2. Fit Score using Bigrams (captures 1-word and 2-word combinations)
     vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 2))
     tfidf_matrix = vectorizer.fit_transform([jd_text, cv_text])
     similarity = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])[0][0]
     auto_score = round(similarity * 10, 1)
     
+    # 3. Extract Top Keywords using a phrase-aware ranking system
     jd_vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 2))
     jd_matrix = jd_vectorizer.fit_transform([jd_text])
     feature_names = jd_vectorizer.get_feature_names_out()
     scores = jd_matrix.toarray()[0]
     
+    # Sort words/phrases by their relevance score
+    sorted_indices = scores.argsort()[::-1]
     top_jd_words = []
-    for idx in scores.argsort()[::-1]:
+    
+    for idx in sorted_indices:
         word = feature_names[idx]
-        if len(word) < 3 or word.isdigit() or any(fluff in word.split() for fluff in corporate_fluff):
+        
+        # Skip words that are numbers, too short, or contain blacklisted fluff
+        if len(word) < 3 or word.isdigit():
             continue
+        if any(fluff in word.split() for fluff in corporate_fluff):
+            continue
+            
         top_jd_words.append(word)
-        if len(top_jd_words) >= 10:
+        if len(top_jd_words) >= 12: # Extract the top 12 true domain keywords
             break
             
-    matched, missing = [], []
+    # 4. Math Check: Cross-reference keywords against CV
+    matched = []
+    missing = []
     for word in top_jd_words:
+        # Use regex to find whole phrases/words cleanly
         pattern = r'\b' + re.escape(word) + r'\b'
         if re.search(pattern, cv_text):
+            # Capitalize words nicely for the UI display
             matched.append(word.title())
         else:
             missing.append(word.title())
@@ -96,6 +113,8 @@ if 'user_profile' not in st.session_state:
     st.session_state.user_profile = {}
 if 'private_apps' not in st.session_state:
     st.session_state.private_apps = []
+if 'analysis_buffer' not in st.session_state:
+    st.session_state.analysis_buffer = None
 
 # --- ROUTING SYSTEM ---
 
@@ -197,7 +216,9 @@ elif st.session_state.view_state == 'main_app':
             jd_text_block = st.text_area("Key Responsibility Areas (KRA) Source String*", height=150)
             uploaded_file = st.file_uploader("Upload Core Tracking CV (PDF Format Only)*", type=["pdf"])
             
-            if st.form_submit_button("Run Strategic Structural Analysis"):
+            form_submit = st.form_submit_button("Run Strategic Structural Analysis")
+            
+            if form_submit:
                 if not role or not domain or not jd_text_block or not uploaded_file:
                     st.error("Critical parsing nodes are missing relevant field input validations.")
                 else:
@@ -210,18 +231,8 @@ elif st.session_state.view_state == 'main_app':
                     # --- NATIVE LATEX SEAMLESS TEMPLATE MATCHING ENGINE ---
                     user = st.session_state.user_profile
                     
-                    # Core LaTeX template structural blocks with safe string substitutions
                     latex_template = r"""\documentclass[10pt, letterpaper]{article}
-
-% Packages:
-\usepackage[
-    ignoreheadfoot, 
-    top=2 cm, 
-    bottom=2 cm, 
-    left=2 cm, 
-    right=2 cm, 
-    footskip=1.0 cm
-]{geometry} 
+\usepackage[ignoreheadfoot, top=2 cm, bottom=2 cm, left=2 cm, right=2 cm, footskip=1.0 cm]{geometry} 
 \usepackage{titlesec} 
 \usepackage{tabularx} 
 \usepackage{array} 
@@ -230,13 +241,7 @@ elif st.session_state.view_state == 'main_app':
 \usepackage{enumitem} 
 \usepackage{fontawesome5} 
 \usepackage{amsmath} 
-\usepackage[
-    pdftitle={CV},
-    pdfauthor={Applicant},
-    pdfcreator={LaTeX with RenderCV},
-    colorlinks=true,
-    urlcolor=primaryColor
-]{hyperref} 
+\usepackage[pdftitle={CV}, pdfauthor={Applicant}, pdfcreator={LaTeX with RenderCV}, colorlinks=true, urlcolor=primaryColor]{hyperref} 
 \usepackage[pscoord]{eso-pic} 
 \usepackage{calc} 
 \usepackage{bookmark} 
@@ -256,7 +261,6 @@ elif st.session_state.view_state == 'main_app':
 \fi
 
 \usepackage{charter}
-
 \raggedright
 \AtBeginEnvironment{adjustwidth}{\partopsep0pt} 
 \pagestyle{empty} 
@@ -272,12 +276,6 @@ elif st.session_state.view_state == 'main_app':
 \renewcommand\labelitemi{$\vcenter{\hbox{\small$\bullet$}}$} 
 \newenvironment{highlights}{
     \begin{itemize}[topsep=0.10 cm, parsep=0.10 cm, partopsep=0pt, itemsep=1pt, leftmargin=0 cm + 10pt]
-}{
-    \end{itemize}
-} 
-
-\newenvironment{highlightsforbulletentries}{
-    \begin{itemize}[topsep=0.10 cm, parsep=0.10 cm, partopsep=0pt, itemsep=0pt, leftmargin=10pt]
 }{
     \end{itemize}
 } 
@@ -302,11 +300,10 @@ elif st.session_state.view_state == 'main_app':
 \begin{document}
 
     \begin{header}
-        \fontsize{40 pt}{40 pt}\selectfont __NAME__
+        \fontfamily{cmr}\selectfont\centering{\fontsize{32 pt}{32 pt}\selectfont __NAME__}
 
         \vspace{5 pt}
-
-        \normalsize
+        \centering\normalsize
         \mbox{__HOMETOWN__}%
         \kern 5.0 pt$\vert$\kern 5.0 pt%
         \mbox{\href{mailto:Supradipdasslg016@gmail.com}{Supradipdasslg016@gmail.com}}%
@@ -316,7 +313,7 @@ elif st.session_state.view_state == 'main_app':
         \mbox{\href{https://www.linkedin.com/in/supradip-das016/}{linkedin.com/in/Supradip Das}}%
     \end{header}
 
-    \vspace{5 pt - 0.3 cm}
+    \vspace{10 pt}
 
     \section{Personal Summary}
     \begin{onecolentry}
@@ -330,7 +327,7 @@ elif st.session_state.view_state == 'main_app':
     \vspace{0.10 cm}
     \begin{onecolentry}
         \begin{highlights}
-            \item \textbf{Metrics:} CGPA: 7.9 / 10.0 Evaluation Framework
+            \item \textbf{Metrics:} CGPA Evaluation Framework Matching Job Targets
             \item \textbf{Coursework:} Marketing Management, Branding, Digital Infrastructure Analytics, Statistical Optimization.
         \end{highlights}
     \end{onecolentry}
@@ -359,7 +356,6 @@ elif st.session_state.view_state == 'main_app':
 
 \end{document}"""
 
-                    # Regex token optimization replacement strategy
                     updated_latex = latex_template.replace("__NAME__", user['name'])
                     updated_latex = updated_latex.replace("__HOMETOWN__", user['hometown'])
                     updated_latex = updated_latex.replace("__COLLEGE__", user['college'])
@@ -370,14 +366,13 @@ elif st.session_state.view_state == 'main_app':
                     updated_latex = updated_latex.replace("__MATCHED_SKILLS__", matched_string)
                     updated_latex = updated_latex.replace("__MISSING_SKILLS__", missing_string)
                     
-                    # Dynamically generate tailored LaTeX bullet points using missing tokens
                     if missing:
                         bullet_txt = f"\\item Spearheaded custom pipeline evaluations using targeted \\textbf{{{missing[0]}}} and \\textbf{{{missing[1] if len(missing)>1 else missing[0]}}} architectures to eliminate process gaps."
                     else:
                         bullet_txt = "\\item Optimized multi-channel operational workflows to maintain robust lead pipeline acquisition standards."
                     updated_latex = updated_latex.replace("__DYNAMIC_EXPERIENCE_BULLET__", bullet_txt)
 
-                    # Save state record
+                    # Store log packet
                     app_record = {
                         "Role": role, "Domain": domain, "Recruiter": recruiter, "LinkedIn": linkedin,
                         "Exp Limits": exp_range_calculated, "auto_score": score,
@@ -386,32 +381,42 @@ elif st.session_state.view_state == 'main_app':
                     }
                     st.session_state.private_apps.append(app_record)
                     
-                    st.success("Target Pipeline Executed Successfully!")
-                    
-                    st.markdown("---")
-                    st.subheader("💡 Strategic Action Recommendations & LaTeX Dashboard")
-                    
-                    col_rec1, col_rec2 = st.columns(2)
-                    with col_rec1:
-                        st.metric("Algorithmic Match Score", f"{score} / 10")
-                        st.info(f"**Identified Target Alignments:**\n{matched_string}")
-                        st.warning(f"**Critical Targeting Gaps Discovered:**\n{missing_string}")
-                        
-                    with col_rec2:
-                        st.markdown("### **Next Steps & Upgraded LaTeX Output**")
-                        st.markdown("🔥 **SaaS Feature Unlocked:** We have dynamically updated your exact custom LaTeX layout format! The missing target keywords and tailored bullet entries have been structurally injected into the source code matrix.")
-                        
-                        # Trigger Download Action
-                        st.download_button(
-                            label="📥 Download Tailored LaTeX Code (.tex File)",
-                            data=updated_latex,
-                            file_name=f"{user['name'].lower().replace(' ', '_')}_optimized.tex",
-                            mime="text/x-tex",
-                            use_container_width=True
-                        )
-                        st.caption("💡 **Execution Guide:** Click download, open the `.tex` file, copy everything, paste it into your workspace on **Overleaf**, and click Recompile for a flawless PDF result.")
-                    
-                    # Code display preview box
-                    st.markdown("### **Source Preview Matrix**")
-                    st.code(updated_latex, language="latex")
-                    st.balloons()
+                    # Cache states out of form loop boundaries
+                    st.session_state.analysis_buffer = {
+                        "role": role, "score": score, "matched_string": matched_string,
+                        "missing_string": missing_string, "updated_latex": updated_latex
+                    }
+                    st.rerun()
+
+        # --- SAFE OUTPUT DOMAIN (OUTSIDE ST.FORM) ---
+        if st.session_state.analysis_buffer is not None:
+            buf = st.session_state.analysis_buffer
+            st.success("Target Pipeline Executed Successfully!")
+            
+            st.markdown("---")
+            st.subheader("💡 Strategic Action Recommendations & LaTeX Dashboard")
+            
+            col_rec1, col_rec2 = st.columns(2)
+            with col_rec1:
+                st.metric("Algorithmic Match Score", f"{buf['score']} / 10")
+                st.info(f"**Identified Target Alignments:**\n{buf['matched_string']}")
+                st.warning(f"**Critical Targeting Gaps Discovered:**\n{buf['missing_string']}")
+                
+            with col_rec2:
+                st.markdown("### **Next Steps & Upgraded LaTeX Output**")
+                st.markdown("🔥 **SaaS Feature Unlocked:** We have dynamically updated your exact custom LaTeX layout format! The missing target keywords and tailored bullet entries have been structurally injected into the source code matrix.")
+                
+                # Render download component free of form locks
+                st.download_button(
+                    label="📥 Download Tailored LaTeX Code (.tex File)",
+                    data=buf['updated_latex'],
+                    file_name=f"{st.session_state.user_profile['name'].lower().replace(' ', '_')}_optimized.tex",
+                    mime="text/x-tex",
+                    use_container_width=True
+                )
+                st.caption("💡 **Execution Guide:** Click download, open the `.tex` file, copy everything, paste it into your workspace on **Overleaf**, and click Recompile for a flawless PDF result.")
+            
+            # Code display box
+            st.markdown("### **Source Preview Matrix**")
+            st.code(buf['updated_latex'], language="latex")
+            st.balloons()
